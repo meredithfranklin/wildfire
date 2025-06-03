@@ -1,0 +1,74 @@
+---
+title: "Supp. Code 2"
+author: "Bernard Miskic"
+date: "2025-06-03"
+output: pdf_document
+---
+
+```{r}
+avg_pm = read_rds('/Users/bernardmiskic/Downloads/(No subject)/avg_pm.rds')
+ca.counties = read_rds('/Users/bernardmiskic/Downloads/(No subject)/ca.counties.rds')
+ca.countiesp = read_rds('/Users/bernardmiskic/Downloads/(No subject)/ca.countiesp.rds')
+```
+
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(leaflet)
+library(sf)
+library(units)
+library(ggmap)
+library(htmltools)
+
+pop.pal=colorNumeric(c('pink','purple'),
+                     domain=ca.counties$smoke_count,na.color=NA)
+pm25.pal=colorQuantile(c('darkgreen','goldenrod','brown'),domain=avg_pm$mean_PM,n=4,
+                       probs=seq(0,1,length.out=5),alpha=FALSE,reverse=FALSE,right=FALSE)
+pm25_colours=unique(pm25.pal(sort(avg_pm$mean_PM)))
+pm25_labs=c(1,7,9,12,25)
+pm25_labs=paste(lag(pm25_labs),pm25_labs,sep=' - ')[-1]
+factop=function(x){
+  ifelse(is.na(x),0,1)
+}
+plot=leaflet() %>% 
+  addProviderTiles('CartoDB.Positron') %>% 
+  addPolygons(data=ca.counties,fillColor=~pop.pal(smoke_count),weight=.5,fillOpacity=~factop(smoke_count),
+              label=~paste0(NAMELSAD,': ',smoke_count)) %>% 
+  addCircles(data=avg_pm,label=~paste0(mean_PM,' ug/m3'),color=~pm25.pal(mean_PM),
+             opacity=1,fillOpacity=1,radius=500) %>% 
+  leaflet::addLegend(position='topright',colors=pm25_colours,labels=pm25_labs,titl='PM2.5 (ug/m3)',
+                     opacity=1) %>% 
+  leaflet::addLegend('bottomleft',pal=pop.pal,values=ca.counties$smoke_count,title = 'Number of </br> Smoke Days',
+                     opacity=1)
+
+plot
+
+register_google(key = "AIzaSyD1Rdw1ZNe5byS8M5vGcwjy_hssCDsbPYQ")
+map = get_map(location = "california")
+ggmap(map)
+
+ggmap(map)
+p=get_map('california', zoom=6, maptype='hybrid', source = 'google') %>% 
+  # ggmap_bbox() %>% # custom function from StackOverflow to fix ggmap raster projection
+  ggmap(extent='device') +
+  coord_sf(crs = st_crs(4326)) +
+  theme(legend.text=element_text(size=18),
+        legend.title=element_text(size=18),
+        panel.background = element_blank(),
+        axis.line=element_blank(),
+        axis.text=element_blank(),
+        axis.ticks=element_blank(),
+        axis.title=element_blank())
+p+geom_sf(data=ca.counties,aes(fill=smoke_count),inherit.aes = FALSE)+
+  scale_fill_continuous(low='pink',high='purple')+
+  geom_sf(data=avg_pm,aes(color=mean_PM),, size=2, alpha=.9,inherit.aes = FALSE)+
+  scale_color_continuous(low='forestgreen', high='red')+
+  labs(fill="Number of Smoke Days",color="PM2.5 (ug/m3)")
+
+p+geom_sf(data=ca.countiesp,aes(fill=participant_count),inherit.aes = FALSE)+
+  scale_fill_continuous(low='pink',high='purple')+
+  labs(fill="Number of Participants")
+```
+
+
