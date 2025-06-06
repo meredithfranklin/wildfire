@@ -1,0 +1,120 @@
+---
+title: "Data Cleaning"
+output: html_document
+date: "2025-06-05"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(readr)
+library(sf)
+library(ggplot2)
+library(leaflet)
+library(missRanger)
+library(dplyr)
+library(arrow)
+library(tidyr)
+library(ranger)
+library(missForest)
+library(magrittr)
+library(geojsonio)
+library(htmltools)
+library(htmlwidgets)
+library(stringi)
+library(RColorBrewer)
+library(ggthemes)
+library(tidyverse)
+library(ggrepel)
+library(dygraphs)
+library(xts) 
+library(xgboost)
+library(mgcv)
+```
+
+```{r}
+data <- read.csv("bc_merged_data/Merged_AQS_CSN_2003_2023_BC_Data.csv")
+
+# Add date variables
+data$Date = as.Date(data$Date)
+data$Month = format(as.Date(data$Date, format="%Y-%m-%d"),"%m")
+data$yDate = format(as.Date(data$Date, format="%Y-%m-%d"),"%j")
+data$Year = as.character(data$Year)
+data$Julian_Date = as.numeric(data$Date)
+
+data = data %>% mutate(Season = case_when(Month %in% c("12", "01", "02") ~ "Winter",
+                                          Month %in% c("03", "04", "05") ~ "Spring",
+                                          Month %in% c("06", "07", "08") ~ "Summer",
+                                          Month %in% c("09", "10", "11") ~ "Autumn"))
+
+unique_station_data = data |> select(Longitude, Latitude, STATION_NAME, EMS_ID) |> unique()
+data
+```
+
+Check wind direction
+```{r}
+data %>% summarize(min_winddirc = min(WDIR_VECT_DEG_DAILY), max_winddirc = max(WDIR_VECT_DEG_DAILY))
+```
+
+Check Wind Speed, delete the observation
+```{r}
+data %>% summarize(mean_wind = mean(WSPD_VECT_MS_DAILY), min_wind = min(WSPD_VECT_MS_DAILY), max_wind = max(WSPD_VECT_MS_DAILY))
+
+which(data$WSPD_VECT_MS_DAILY < 0)
+data = data %>% filter(WSPD_VECT_MS_DAILY >= 0)
+
+data %>% summarize(mean_wind = mean(WSPD_VECT_MS_DAILY), min_wind = min(WSPD_VECT_MS_DAILY), max_wind = max(WSPD_VECT_MS_DAILY))
+```
+
+Summary statistics for mean temperature:
+```{r}
+data %>% summarize(mean_temp = mean(TEMP_MEAN_XB0C_DAILY), min_temp = min(TEMP_MEAN_XB0C_DAILY), max_temp = max(TEMP_MEAN_XB0C_DAILY))
+boxplot(data$TEMP_MEAN_XB0C_DAILY, ylim=c(-40, 60))
+sum(data$TEMP_MEAN_XB0C_DAILY < -40)
+```
+
+Find all unreasonable temperature data under -40 degrees
+```{r}
+which(data$TEMP_MEAN_XB0C_DAILY < -40)
+```
+
+Linear interpolate the outliers
+```{r}
+outliers = which(data$TEMP_MEAN_XB0C_DAILY < -40)
+data$temp_id = seq_len(nrow(data))
+temp_data = subset(data, TEMP_MEAN_XB0C_DAILY >= -40)
+linear_interp_func = approxfun(temp_data$temp_id, temp_data$TEMP_MEAN_XB0C_DAILY, method="linear")
+data$TEMP_MEAN_XB0C_DAILY[outliers] = linear_interp_func(outliers)
+data[12440:12480,]
+```
+
+```{r}
+data %>% summarize(mean_temp = mean(TEMP_MEAN_XB0C_DAILY), min_temp = min(TEMP_MEAN_XB0C_DAILY), max_temp = max(TEMP_MEAN_XB0C_DAILY))
+```
+
+Set PM=0 to PM=0.01 to transform to normal distribution
+```{r}
+data$PM25_UG_M3_DAILY = replace(data$PM25_UG_M3_DAILY, data$PM25_UG_M3_DAILY == 0, 0.01)
+data %>% summarize(minPM25 = min(PM25_UG_M3_DAILY))
+```
+
+Set a smoke score
+```{r}
+data = data %>% mutate(smoke_score = case_when(heavy == 1 ~ "Heavy",
+                                               med == 1 ~ "Medium",
+                                               light == 1 ~ "Light",
+                                               TRUE ~ "None"))
+table(data$smoke_score)
+```
+
+```{r}
+data$temp_id = NULL
+```
+
+Download the data
+```{r}
+write.csv(data, "bc_merged_data/Cleaned_AQS_CSN_2003_2023_BC_Data.csv", row.names=FALSE)
+```
+
