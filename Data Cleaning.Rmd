@@ -68,6 +68,12 @@ data = data %>% filter(WSPD_VECT_MS_DAILY >= 0)
 data %>% summarize(mean_wind = mean(WSPD_VECT_MS_DAILY), min_wind = min(WSPD_VECT_MS_DAILY), max_wind = max(WSPD_VECT_MS_DAILY))
 ```
 
+One observation in wind is unrealistic, delete observation
+```{r}
+which(data$WSPD_VECT_MS_DAILY > 50)
+data = data %>% filter(WSPD_VECT_MS_DAILY < 100)
+```
+
 Summary statistics for mean temperature:
 ```{r}
 data %>% summarize(mean_temp = mean(TEMP_MEAN_XB0C_DAILY), min_temp = min(TEMP_MEAN_XB0C_DAILY), max_temp = max(TEMP_MEAN_XB0C_DAILY))
